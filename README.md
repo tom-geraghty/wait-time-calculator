@@ -1,157 +1,153 @@
-Inputs (Columns 1–11)
+Queueing Calculator README
+This Python script (costscript.py) creates an Excel spreadsheet that demonstrates how increased utilisation and multiple weekly requests lead to longer wait times, higher context-switching and decision overheads, and ultimately higher costs of delay.
+
+Contents
+Requirements
+Installation
+Usage
+Spreadsheet Columns
+Examples
+Troubleshooting
+Requirements
+Python 3.7+
+The script uses the openpyxl library, which works with Python 3.7 and above.
+openpyxl library
+Required for writing Excel files. If you do not already have it installed, follow the instructions below.
+Installation
+Install Python 3
+
+If you’re on macOS and using Homebrew, you can install Python with:
+bash
+Copy
+brew install python
+Alternatively, download and install from python.org.
+Create a virtual environment (recommended)
+
+bash
+Copy
+python3 -m venv venv
+source venv/bin/activate
+This ensures any libraries you install do not affect other Python projects.
+
+Install openpyxl
+
+bash
+Copy
+pip install openpyxl
+If you prefer to install system-wide (and understand the potential implications), you can omit the virtual environment. However, using a virtual environment is the safer option.
+
+Download or clone this repository
+
+Place the costscript.py file in a directory of your choice.
+Usage
+Activate your virtual environment (if you created one):
+
+bash
+Copy
+source venv/bin/activate
+Run the script:
+
+bash
+Copy
+python costscript.py
+or make it executable and run:
+
+bash
+Copy
+chmod +x costscript.py
+./costscript.py
+Check the generated spreadsheet
+The script will create a file called queueing_calculator.xlsx in the current directory.
+Open it in Excel (or another spreadsheet application) to see the results.
+
+Spreadsheet Columns
+The spreadsheet has several columns. Below is an overview:
+
 Scenario
-A label or name for this row’s scenario (e.g., “Scenario A”, “Scenario B”).
-- Use this to distinguish between different utilisation assumptions or different teams.
+A label or name for each row’s scenario (e.g., “Scenario A”).
 
 Your Utilisation (rho_you)
-The fraction (0 to 1) of your (or your team’s) total capacity that is already occupied.
-- Example: 0.5 = 50% utilised, 0.9 = 90% utilised.
+The fraction of your (or your team’s) time that is utilised (e.g., 0.50 for 50%).
 
 Their Utilisation (rho_them)
-The fraction (0 to 1) of another team’s/person’s capacity that is in use.
-- Example: If you rely on someone else who is 80% busy, you’d put 0.8.
+The fraction of another team’s time that is utilised (e.g., 0.80 for 80%).
 
 Requests per Week (lambda)
-How many times per week you need something—information, sign-off, access, or decisions—from another person/team.
-- This figure directly multiplies your per-request overhead and wait time to produce a total weekly delay.
+How many times per week you require a sign-off, decision, or information from the other team.
 
 Base Wait Time (hrs) at Ref Util
-The observed or estimated wait time per request at some known “Reference Utilisation.”
-- For instance, if at 50% utilisation you typically wait 2 hours for a response, then 2.0 goes here.
+The observed wait time per request at the reference utilisation level. For instance, if you found that at 50% utilisation, each request typically waits 2 hours, you put 2.0.
 
 Ref Util (%) for Base Measure
-The utilisation level at which you originally measured the Base Wait Time.
-- If you measured it at 50% utilisation, you’d put 0.50.
+The utilisation level at which the Base Wait Time was measured. For example, 0.50 if you measured it at 50% utilisation.
 
 Context Switch Base (hrs)
-The baseline overhead (in hours) for context switching per request, measured at the reference utilisation.
-- For example, 0.2 hours (12 minutes) is how much time you spend “switching tasks” when utilisation is at the reference level.
+The baseline overhead (in hours) for switching contexts, measured at the reference utilisation.
+For instance, 0.2 hours (12 minutes).
 
 Decision Overhead Base (hrs)
-The baseline overhead (in hours) for decision-making per request, at the reference utilisation.
-- For example, 0.1 hours might be the time for a quick approval at the reference level.
+The baseline overhead (in hours) for making decisions, measured at the reference utilisation.
+For instance, 0.1 hours.
 
 Context Scaling Factor (k)
-A multiplier indicating how context-switching overhead increases (or decreases) as utilisation changes away from the reference.
-- If 
+A multiplier that indicates how much more (or less) the context-switch overhead scales as utilisation increases.
+If 
 𝑘
 =
 1.0
-k=1.0, doubling utilisation relative to the reference doubles the context-switching overhead.
+k=1.0, doubling utilisation from the reference doubles the overhead.
 
 Decision Scaling Factor (m)
-A multiplier indicating how decision-making overhead scales with utilisation changes.
-- If 
+A multiplier for how decision overhead scales with changes in utilisation.
+If 
 𝑚
 =
 1.0
-m=1.0, doubling utilisation relative to the reference doubles the decision overhead.
+m=1.0, doubling utilisation from the reference doubles the decision overhead.
 
 Cost of Delay (£ per hour)
-How much each hour of delay costs in monetary terms.
-- This can represent lost revenue, opportunity cost, or fully-loaded labour cost.
+The cost (in pounds per hour) that represents lost opportunity, delayed revenue, or other costs associated with waiting.
 
-Calculated Outputs (Columns 12–16)
 Per-Request Wait Time (hrs)
+Calculated from the Base Wait Time by scaling up or down according to your current utilisation versus the reference.
 
-A formula that scales your Base Wait Time to the current utilisation level.
-Typically, a ratio-based approach is used (such as:
-Per-Request Wait Time
-=
-Base Wait Time
-×
-1
-−
-Ref Util
- 
-1
-−
-𝜌
-you
- 
-Per-Request Wait Time=Base Wait Time× 
-1−ρ 
-you
-​
- 
-1−Ref Util
-​
- 
-) to illustrate how wait time becomes disproportionately longer as 
-𝜌
-you
-ρ 
-you
-​
-  approaches 1.
 Per-Request Context Overhead (hrs)
+How much context-switch time is incurred per request, scaled by utilisation and the Context Scaling Factor.
 
-The context-switch cost per request, scaled by your current utilisation:
-=
-Context Switch Base
-×
-(
-𝜌
-you
-Ref Util
-)
-×
-𝑘
-=Context Switch Base×( 
-Ref Util
-ρ 
-you
-​
- 
-​
- )×k
 Per-Request Decision Overhead (hrs)
+How much decision-making time is incurred per request, also scaled by utilisation.
 
-The decision-making overhead per request, similarly scaled:
-=
-Decision Overhead Base
-×
-(
-𝜌
-you
-Ref Util
-)
-×
-𝑚
-=Decision Overhead Base×( 
-Ref Util
-ρ 
-you
-​
- 
-​
- )×m
 Total Delay (hrs/week)
+The combined wait time, context switching, and decision overhead multiplied by the number of weekly requests.
 
-The total hours of delay per week, factoring in how many requests arrive:
-=
-(
-Per-Request Wait
-+
-Context Overhead
-+
-Decision Overhead
-)
-×
-Requests per Week
-=(Per-Request Wait+Context Overhead+Decision Overhead)×Requests per Week
 Total Cost (£/week)
+The total delay (in hours per week) multiplied by the Cost of Delay (£ per hour), giving a weekly financial impact.
 
-Converts the total weekly delay into a monetary figure:
-=
-Total Delay (hrs/week)
-×
-Cost of Delay (£ per hour)
-=Total Delay (hrs/week)×Cost of Delay (£ per hour)
-This helps quantify, in pounds, the financial impact of having a high volume of requests and high utilisation.
+Examples
+Example Scenario A
+Your Utilisation: 50%
+Their Utilisation: 50%
+Requests per Week: 5
+Base Wait Time (hrs): 2.0
+Ref Util: 0.50
+Context Switch Base: 0.20 hrs
+Decision Overhead Base: 0.10 hrs
+Context Scaling Factor (k): 1.0
+Decision Scaling Factor (m): 1.0
+Cost of Delay: £100/hr
+Example Scenario B
+Your Utilisation: 90%
+Their Utilisation: 80%
+Requests per Week: 10
+Base Wait Time (hrs): 2.0
+Ref Util: 0.50
+Context Switch Base: 0.20 hrs
+Decision Overhead Base: 0.10 hrs
+Context Scaling Factor (k): 1.0
+Decision Scaling Factor (m): 1.0
+Cost of Delay: £100/hr
+By comparing these scenarios in the final spreadsheet, you’ll see how the higher utilisation and number of requests in Scenario B significantly increase total delay and cost per week.
 
 
-Putting It All Together
-Columns 1–11: Input parameters for each scenario—who is busy, how many requests there are, what the baseline overheads are, and how costs scale.
-Columns 12–16: Formula-driven outputs showing the per-request delays (wait, context, decision) multiplied by Requests per Week to produce a weekly time cost, and then converted into a Total Cost in pounds per week.
-By comparing rows (multiple scenarios), you can demonstrate how different utilisation levels or numbers of requests drastically affect total delays and costs.
+Thanks for using the Queueing Calculator!
+We hope it helps illuminate how heavily-utilised teams and frequent requests can blow up wait times and costs. Feel free to modify the spreadsheet formulas to better suit your organisation’s specific context, or add additional rows/scenarios for deeper analyses.
