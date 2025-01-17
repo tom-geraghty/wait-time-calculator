@@ -1,18 +1,13 @@
 Queueing Calculator README
 This Python script (costscript.py) creates an Excel spreadsheet that demonstrates how increased utilisation and multiple weekly requests lead to longer wait times, higher context-switching and decision overheads, and ultimately higher costs of delay.
 
-Contents
-Requirements
-Installation
-Usage
-Spreadsheet Columns
-Examples
-Troubleshooting
+
 Requirements
 Python 3.7+
 The script uses the openpyxl library, which works with Python 3.7 and above.
 openpyxl library
 Required for writing Excel files. If you do not already have it installed, follow the instructions below.
+
 Installation
 Install Python 3
 
