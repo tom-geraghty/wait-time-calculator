@@ -1,4 +1,7 @@
-Queueing Calculator README
+Queueing Calculator 
+
+README
+
 This Python script (costscript.py) creates an Excel spreadsheet that demonstrates how increased utilisation and multiple weekly requests lead to longer wait times, higher context-switching and decision overheads, and ultimately higher costs of delay.
 
 
