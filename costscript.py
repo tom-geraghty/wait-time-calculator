@@ -1,296 +1,184 @@
 #!/usr/bin/env python3
-import os
-from flask import Flask, request, render_template_string
 
-app = Flask(__name__)
+import openpyxl
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
 
-# We’ll store two HTML templates inline:
-# 1) A Bootstrap-based form for Current State vs. Future State
-# 2) A results page with cards showing each scenario side by side
+def create_queueing_spreadsheet(filename="queueing_calculator.xlsx"):
+    """
+    Creates an Excel spreadsheet for a simplified Queueing Calculator with:
+      - 2 header rows for INPUT/OUTPUT and Column Headings
+      - 1 row of explanatory text
+      - Rows for 'Current state' and 'Future state' data
+    """
 
-form_html = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Queueing Calculator - Compare Current & Future</title>
-  <!-- Bootstrap 5 CSS (CDN) -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
-    body {
-      margin: 20px;
-    }
-    .scenario-card {
-      margin-bottom: 2rem;
-      border: 1px solid #ddd;
-      padding: 1rem;
-      border-radius: 8px;
-    }
-    label {
-      font-weight: 500;
-      margin-top: 0.5rem;
-    }
-    .scenario-title {
-      margin-bottom: 1rem;
-      font-weight: 600;
-      font-size: 1.25rem;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1 class="my-4">Queueing Calculator</h1>
-    <p class="text-secondary">Compare <strong>Current</strong> vs. <strong>Future</strong> states with a more polished UI.</p>
-    
-    <form method="POST" action="/" class="row g-4">
-      <!-- Current State -->
-      <div class="col-12 col-lg-6 scenario-card">
-        <div class="scenario-title">Current State</div>
-        
-        <label for="rho_you_cur">Your Utilisation (0.0 - 1.0)</label>
-        <input type="number" step="0.01" id="rho_you_cur" name="rho_you_cur"
-               class="form-control" placeholder="0.50" value="0.50" required>
-        
-        <label for="requests_cur">Requests per Week</label>
-        <input type="number" step="1" id="requests_cur" name="requests_cur"
-               class="form-control" placeholder="5" value="5" required>
-        
-        <label for="base_wait_time_cur">Base Wait Time (hrs) at Ref Util</label>
-        <input type="number" step="0.01" id="base_wait_time_cur" name="base_wait_time_cur"
-               class="form-control" placeholder="2.0" value="2.0" required>
-        
-        <label for="ref_util_cur">Ref Util (0.0 - 1.0)</label>
-        <input type="number" step="0.01" id="ref_util_cur" name="ref_util_cur"
-               class="form-control" placeholder="0.50" value="0.50" required>
-        
-        <label for="cost_of_delay_cur">Cost of Delay (£ per hour)</label>
-        <input type="number" step="0.01" id="cost_of_delay_cur" name="cost_of_delay_cur"
-               class="form-control" placeholder="100" value="100" required>
-        
-        <label for="willing_to_pay_cur">Willing to Pay (£/week)</label>
-        <input type="number" step="0.01" id="willing_to_pay_cur" name="willing_to_pay_cur"
-               class="form-control" placeholder="0" value="0" required>
-      </div>
-      
-      <!-- Future State -->
-      <div class="col-12 col-lg-6 scenario-card">
-        <div class="scenario-title">Future State</div>
-        
-        <label for="rho_you_fut">Your Utilisation (0.0 - 1.0)</label>
-        <input type="number" step="0.01" id="rho_you_fut" name="rho_you_fut"
-               class="form-control" placeholder="0.90" value="0.90" required>
-        
-        <label for="requests_fut">Requests per Week</label>
-        <input type="number" step="1" id="requests_fut" name="requests_fut"
-               class="form-control" placeholder="5" value="5" required>
-        
-        <label for="base_wait_time_fut">Base Wait Time (hrs) at Ref Util</label>
-        <input type="number" step="0.01" id="base_wait_time_fut" name="base_wait_time_fut"
-               class="form-control" placeholder="2.0" value="2.0" required>
-        
-        <label for="ref_util_fut">Ref Util (0.0 - 1.0)</label>
-        <input type="number" step="0.01" id="ref_util_fut" name="ref_util_fut"
-               class="form-control" placeholder="0.50" value="0.50" required>
-        
-        <label for="cost_of_delay_fut">Cost of Delay (£ per hour)</label>
-        <input type="number" step="0.01" id="cost_of_delay_fut" name="cost_of_delay_fut"
-               class="form-control" placeholder="100" value="100" required>
-        
-        <label for="willing_to_pay_fut">Willing to Pay (£/week)</label>
-        <input type="number" step="0.01" id="willing_to_pay_fut" name="willing_to_pay_fut"
-               class="form-control" placeholder="500" value="500" required>
-      </div>
-      
-      <div class="col-12 text-end">
-        <button type="submit" class="btn btn-primary btn-lg">Calculate Both</button>
-      </div>
-    </form>
-  </div>
-</body>
-</html>
-"""
+    # Create a new workbook and select the active worksheet
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Queueing Calculator"
 
-result_html = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Queueing Comparison Results</title>
-  <!-- Bootstrap 5 CSS (CDN) -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
-    body { margin: 20px; }
-    .scenario-card {
-      border: 1px solid #ddd;
-      padding: 1rem;
-      border-radius: 8px;
-      margin-bottom: 2rem;
-    }
-    .scenario-card h3 { margin-top: 0.5rem; }
-    .summary-table {
-      width: 100%%;
-      border-collapse: collapse;
-      margin-top: 1rem;
-    }
-    .summary-table th, .summary-table td {
-      border: 1px solid #ccc;
-      padding: 0.75rem;
-      text-align: left;
-    }
-    .scenario-title {
-      font-weight: 600;
-      font-size: 1.25rem;
-      margin-bottom: 1rem;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1 class="my-4">Comparison of Current vs. Future State</h1>
-    <p class="text-secondary">A side-by-side look at queueing metrics, using a Bootstrap-based layout.</p>
-    
-    <div class="row">
-      <div class="col-12 col-lg-6 scenario-card">
-        <div class="scenario-title">Current State</div>
-        <p><strong>Your Utilisation:</strong> {{ rho_you_cur }}</p>
-        <p><strong>Requests/Week:</strong> {{ requests_cur }}</p>
-        <p><strong>Base Wait Time:</strong> {{ base_wait_time_cur }} hrs <small>(Ref Util: {{ ref_util_cur }})</small></p>
-        <p><strong>Cost of Delay:</strong> £{{ cost_of_delay_cur }}/hr</p>
-        <p><strong>Willing to Pay:</strong> £{{ willing_to_pay_cur }}/week</p>
-        <hr>
-        <h3>Results</h3>
-        <table class="summary-table">
-          <tr>
-            <th>Per-Request Wait Time</th>
-            <td>{{ wait_cur }} hrs</td>
-          </tr>
-          <tr>
-            <th>Total Delay</th>
-            <td>{{ delay_cur }} hrs/week</td>
-          </tr>
-          <tr>
-            <th>Total Delay Cost</th>
-            <td>£{{ cost_cur }}/week</td>
-          </tr>
-          <tr>
-            <th>Net Trade-Off</th>
-            <td>£{{ net_cur }}/week</td>
-          </tr>
-        </table>
-      </div>
-      
-      <div class="col-12 col-lg-6 scenario-card">
-        <div class="scenario-title">Future State</div>
-        <p><strong>Your Utilisation:</strong> {{ rho_you_fut }}</p>
-        <p><strong>Requests/Week:</strong> {{ requests_fut }}</p>
-        <p><strong>Base Wait Time:</strong> {{ base_wait_time_fut }} hrs <small>(Ref Util: {{ ref_util_fut }})</small></p>
-        <p><strong>Cost of Delay:</strong> £{{ cost_of_delay_fut }}/hr</p>
-        <p><strong>Willing to Pay:</strong> £{{ willing_to_pay_fut }}/week</p>
-        <hr>
-        <h3>Results</h3>
-        <table class="summary-table">
-          <tr>
-            <th>Per-Request Wait Time</th>
-            <td>{{ wait_fut }} hrs</td>
-          </tr>
-          <tr>
-            <th>Total Delay</th>
-            <td>{{ delay_fut }} hrs/week</td>
-          </tr>
-          <tr>
-            <th>Total Delay Cost</th>
-            <td>£{{ cost_fut }}/week</td>
-          </tr>
-          <tr>
-            <th>Net Trade-Off</th>
-            <td>£{{ net_fut }}/week</td>
-          </tr>
-        </table>
-      </div>
-    </div>
-    
-    <div class="text-end">
-      <a href="/" class="btn btn-secondary">Back to Form</a>
-    </div>
-  </div>
-</body>
-</html>
-"""
+    # --- Define column content ---
+    # We’ll have 12 columns in total:
+    #  1) Scenario
+    #  2) Your Utilisation
+    #  3) Their Utilisation
+    #  4) Requests per Week
+    #  5) Base Wait Time (hrs) at Ref Util
+    #  6) Ref Util
+    #  7) Cost of Delay (£/hr)
+    #  8) Willing to Pay (£/week)
+    #  9) Calculated Wait Time (hrs/request)
+    # 10) Total Delay (hrs/week)
+    # 11) Total Delay Cost (£/week)
+    # 12) Net Trade-Off (£/week)
 
-@app.route("/", methods=["GET"])
-def form():
-    """Show a Bootstrap-based form for Current & Future state."""
-    return render_template_string(form_html)
+    # Row 1: INPUT or OUTPUT
+    row_types = [
+        "INPUT",       # Scenario (label)
+        "INPUT",       # Your Utilisation
+        "INPUT",       # Their Utilisation
+        "INPUT",       # Requests per Week
+        "INPUT",       # Base Wait Time
+        "INPUT",       # Ref Util
+        "INPUT",       # Cost of Delay
+        "INPUT",       # Willing to Pay
+        "OUTPUT",      # Calculated Wait Time
+        "OUTPUT",      # Total Delay
+        "OUTPUT",      # Total Delay Cost
+        "OUTPUT"       # Net Trade-Off
+    ]
 
-@app.route("/", methods=["POST"])
-def calculate():
-    """Calculate queueing metrics for both scenarios and display with Bootstrap styling."""
-    # --- Current State ---
-    rho_you_cur = float(request.form["rho_you_cur"])
-    requests_cur = float(request.form["requests_cur"])
-    base_wait_time_cur = float(request.form["base_wait_time_cur"])
-    ref_util_cur = float(request.form["ref_util_cur"])
-    cost_of_delay_cur = float(request.form["cost_of_delay_cur"])
-    willing_to_pay_cur = float(request.form["willing_to_pay_cur"])
-    
-    # Calculate wait time for current scenario
-    if (1 - rho_you_cur) == 0:
-        wait_cur = 999999.9
-    else:
-        wait_cur = base_wait_time_cur * ((1 - ref_util_cur) / (1 - rho_you_cur))
-    delay_cur = wait_cur * requests_cur
-    cost_cur = delay_cur * cost_of_delay_cur
-    net_cur = willing_to_pay_cur - cost_cur
+    # Row 2: Column Headings
+    headers = [
+        "Scenario",
+        "Your Utilisation",
+        "Their Utilisation",
+        "Requests per Week",
+        "Base Wait Time (hrs) at Ref Util",
+        "Ref Util",
+        "Cost of Delay (£/hr)",
+        "Willing to Pay (£/week)",
+        "Calculated Wait Time (hrs/request)",
+        "Total Delay (hrs/week)",
+        "Total Delay Cost (£/week)",
+        "Net Trade-Off (£/week)"
+    ]
 
-    # --- Future State ---
-    rho_you_fut = float(request.form["rho_you_fut"])
-    requests_fut = float(request.form["requests_fut"])
-    base_wait_time_fut = float(request.form["base_wait_time_fut"])
-    ref_util_fut = float(request.form["ref_util_fut"])
-    cost_of_delay_fut = float(request.form["cost_of_delay_fut"])
-    willing_to_pay_fut = float(request.form["willing_to_pay_fut"])
-    
-    # Calculate wait time for future scenario
-    if (1 - rho_you_fut) == 0:
-        wait_fut = 999999.9
-    else:
-        wait_fut = base_wait_time_fut * ((1 - ref_util_fut) / (1 - rho_you_fut))
-    delay_fut = wait_fut * requests_fut
-    cost_fut = delay_fut * cost_of_delay_fut
-    net_fut = willing_to_pay_fut - cost_fut
+    # Row 3: Explanatory text (where applicable)
+    # (Leave blank if we don’t have a comment for a particular column)
+    explanations = [
+        "",  # Scenario
+        "The fraction (or percentage) of your own time (or your team’s time) that is currently occupied by uninteruptible work.",
+        "The fraction of another person’s or team’s time that is utilised.",
+        "The number of times per week you need something (e.g., information, sign-off, etc.) from the other person/team. In queueing theory terms, this can be viewed as an arrival rate (λ).",
+        "This is the baseline or reference wait time you have measured at some known 'Reference Utilisation'. For instance, you might have observed that when you (or they) were at 50% utilisation, you typically waited 2 hours for a response. That '2 hours' is your Base Wait Time.",
+        "The utilisation level at which the Base Wait Time was measured. E.g., if you measured that 2-hour wait when utilisation was 50%, you’d put 0.50 here.",
+        "The monetary cost (in £ or another currency) for each hour of delay. This can be a fully loaded labour cost or an estimate of revenue/opportunity cost lost per hour of delay. i.e. if you have a team of ten and pay roughly £20 per hour, it's £200 per hour (at least).",
+        "How much extra you'd be willing to pay each week for higher utilisation, to weigh against the cost of delays. Basically, what do you think the value of this extra work that the team are doing is?",
+        "The wait time per request, scaled from the base wait time by the current utilisation.",
+        "The total weekly hours of delay, i.e. calculated wait time multiplied by the requests per week.",
+        "The cost of that total delay, i.e. total delay hours multiplied by the cost of delay.",
+        "Willing to Pay minus the Total Delay Cost, showing if you come out ahead or behind."
+    ]
 
-    # Render results
-    return render_template_string(
-        result_html,
-        # Current scenario
-        rho_you_cur=rho_you_cur,
-        requests_cur=requests_cur,
-        base_wait_time_cur=base_wait_time_cur,
-        ref_util_cur=ref_util_cur,
-        cost_of_delay_cur=cost_of_delay_cur,
-        willing_to_pay_cur=willing_to_pay_cur,
-        
-        wait_cur=round(wait_cur, 2),
-        delay_cur=round(delay_cur, 2),
-        cost_cur=round(cost_cur, 2),
-        net_cur=round(net_cur, 2),
+    # Write out row 1 (INPUT/OUTPUT labels)
+    for col_idx, col_type in enumerate(row_types, start=1):
+        ws.cell(row=1, column=col_idx, value=col_type)
 
-        # Future scenario
-        rho_you_fut=rho_you_fut,
-        requests_fut=requests_fut,
-        base_wait_time_fut=base_wait_time_fut,
-        ref_util_fut=ref_util_fut,
-        cost_of_delay_fut=cost_of_delay_fut,
-        willing_to_pay_fut=willing_to_pay_fut,
-        
-        wait_fut=round(wait_fut, 2),
-        delay_fut=round(delay_fut, 2),
-        cost_fut=round(cost_fut, 2),
-        net_fut=round(net_fut, 2)
-    )
+    # Write out row 2 (Column Headings)
+    for col_idx, header in enumerate(headers, start=1):
+        ws.cell(row=2, column=col_idx, value=header)
+
+    # Write out row 3 (Explanations)
+    for col_idx, expl in enumerate(explanations, start=1):
+        ws.cell(row=3, column=col_idx, value=expl)
+
+    # We’ll place scenario data in rows 4 (Current state) and 5 (Future state).
+
+    # Example data for Current state
+    current_state_data = [
+        "Current state",  # Scenario
+        0.50,             # Your Utilisation
+        0.60,             # Their Utilisation (not used in formula)
+        5,                # Requests per Week
+        2.0,              # Base Wait Time
+        0.50,             # Ref Util
+        100.0,            # Cost of Delay
+        0.0               # Willing to Pay
+    ]
+
+    # Example data for Future state
+    future_state_data = [
+        "Future state",
+        0.90,   # Your Utilisation
+        0.80,   # Their Utilisation
+        5,
+        2.0,
+        0.50,
+        100.0,
+        500.0   # Willing to Pay
+    ]
+
+    # Put the data in row 4 and 5 for the input columns
+    for row_idx, scenario_data in enumerate([current_state_data, future_state_data], start=4):
+        for col_idx, val in enumerate(scenario_data, start=1):
+            ws.cell(row=row_idx, column=col_idx, value=val)
+
+    # Indices for columns (1-based)
+    col_scenario         = 1
+    col_rho_you          = 2
+    col_rho_them         = 3  # currently unused in formula
+    col_requests         = 4
+    col_base_wait        = 5
+    col_ref_util         = 6
+    col_cost_of_delay    = 7
+    col_willing_to_pay   = 8
+
+    col_calc_wait        = 9  # Calculated Wait Time
+    col_total_delay      = 10
+    col_total_cost       = 11
+    col_net_tradeoff     = 12
+
+    # Apply formulas to rows 4 and 5
+    for row in [4, 5]:
+        cell_rho_you     = f"{get_column_letter(col_rho_you)}{row}"
+        cell_requests    = f"{get_column_letter(col_requests)}{row}"
+        cell_base_wait   = f"{get_column_letter(col_base_wait)}{row}"
+        cell_ref_util    = f"{get_column_letter(col_ref_util)}{row}"
+        cell_cost_delay  = f"{get_column_letter(col_cost_of_delay)}{row}"
+        cell_wtp         = f"{get_column_letter(col_willing_to_pay)}{row}"
+
+        # 1) Calculated Wait Time (hrs/request)
+        #    Simple ratio approach: Wait = Base Wait * [(1 - RefUtil)/(1 - rho_you)] if (1 - rho_you) != 0
+        #    else large number for near-infinite wait
+        formula_wait = (
+            f"=IF((1 - {cell_rho_you})=0,9999999,"
+            f"{cell_base_wait}*((1 - {cell_ref_util})/(1 - {cell_rho_you})))"
+        )
+        ws.cell(row=row, column=col_calc_wait).value = formula_wait
+
+        # 2) Total Delay (hrs/week) = per-request wait * requests/week
+        cell_calc_wait = f"{get_column_letter(col_calc_wait)}{row}"
+        formula_total_delay = f"={cell_calc_wait}*{cell_requests}"
+        ws.cell(row=row, column=col_total_delay).value = formula_total_delay
+
+        # 3) Total Delay Cost (£/week) = total delay * cost_of_delay
+        cell_total_delay = f"{get_column_letter(col_total_delay)}{row}"
+        formula_total_cost = f"={cell_total_delay}*{cell_cost_delay}"
+        ws.cell(row=row, column=col_total_cost).value = formula_total_cost
+
+        # 4) Net Trade-Off (£/week) = Willing to Pay - Total Delay Cost
+        cell_total_cost = f"{get_column_letter(col_total_cost)}{row}"
+        formula_tradeoff = f"={cell_wtp}-{cell_total_cost}"
+        ws.cell(row=row, column=col_net_tradeoff).value = formula_tradeoff
+
+    # Adjust column widths for readability
+    for col in range(1, 13):
+        ws.column_dimensions[get_column_letter(col)].width = 35
+
+    # Save the workbook
+    wb.save(filename)
+    print(f"Spreadsheet '{filename}' created successfully.")
 
 if __name__ == "__main__":
-    # For local testing:
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
-
+    create_queueing_spreadsheet()
